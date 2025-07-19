@@ -182,3 +182,4 @@ terraform.tfstate
 terraform.tfstate.backup
 *.tfplan
 .terraform.lock.hcl
+.terraform/
