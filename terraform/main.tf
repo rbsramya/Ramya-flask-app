@@ -1,3 +1,7 @@
+provider "aws" {
+  region = "ap-southeast-1"
+}
+
 resource "aws_ecr_repository" "ecr" {
   name         = "${local.prefix}-ecr"
   force_delete = true
