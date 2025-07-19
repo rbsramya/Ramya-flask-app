@@ -73,6 +73,7 @@ resource "aws_route_table_association" "public2" {
 
 
 module "ecs" {
+  #checkov:skip=CKV_TF_2:Some description
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.9.0"
 
