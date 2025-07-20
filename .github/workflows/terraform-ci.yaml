@@ -34,11 +34,11 @@ jobs:
     - name: Get Terraform Outputs
       id: terraform-outputs
       run: |
-        echo "ECR_REPOSITORY=$(terraform output -raw ecr_repository_name)" >> $GITHUB_ENV
-        echo "TASK_DEF=$(terraform output -raw task_definition_family)" >> $GITHUB_ENV
-        echo "CONTAINER_NAME=$(terraform output -raw container_name)" >> $GITHUB_ENV
-        echo "ECS_SERVICE=$(terraform output -raw ecs_service_name)" >> $GITHUB_ENV
-        echo "ECS_CLUSTER=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_ENV
+        echo "ecr_repository=$(terraform output -raw ecr_repository_name)" >> $GITHUB_OUTPUT
+        echo "task_def=$(terraform output -raw task_definition_family)" >> $GITHUB_OUTPUT
+        echo "container_name=$(terraform output -raw container_name)" >> $GITHUB_OUTPUT
+        echo "ecs_service=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
+        echo "ecs_cluster=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
 
     - name: Login to Amazon ECR
       id: login-ecr
@@ -51,26 +51,26 @@ jobs:
         context: .
         push: true
         tags: |
-          ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-          ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          ${{ steps.login-ecr.outputs.registry }}/${{ steps.terraform-outputs.outputs.ecr_repository }}:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ steps.terraform-outputs.outputs.ecr_repository }}:latest
         platforms: linux/amd64
 
     - name: Download task definition
       run: |
-        aws ecs describe-task-definition --task-definition ${{ env.TASK_DEF }} --query taskDefinition > task-definition.json
+        aws ecs describe-task-definition --task-definition ${{ steps.terraform-outputs.outputs.task_def }} --query taskDefinition > task-definition.json
 
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
         task-definition: task-definition.json
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        container-name: ${{ steps.terraform-outputs.outputs.container_name }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ steps.terraform-outputs.outputs.ecr_repository }}:${{ github.sha }}
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
+        service: ${{ steps.terraform-outputs.outputs.ecs_service }}
+        cluster: ${{ steps.terraform-outputs.outputs.ecs_cluster }}
         wait-for-service-stability: true
