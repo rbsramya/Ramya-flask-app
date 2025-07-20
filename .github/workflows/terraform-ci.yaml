@@ -19,36 +19,26 @@ jobs:
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
 
-    # - name: Terraform fmt
-    #   run: terraform fmt -check
-
     - name: Terraform Init
       run: terraform init
        
     - name: Terraform Validate
       run: terraform validate
-
-    - uses: terraform-linters/setup-tflint@v3
-      with:
-        tflint_version: latest
-   
-    # - name: Show version
-    #   run: tflint --version
-
-    # - name: Init TFLint
-    #   run: tflint --init
-
-    # - name: Run TFLint
-    #   run: tflint -f compact
-
-    # - name: Checkov
-    #   uses: bridgecrewio/checkov-action@master
-    #   with:
-    #     framework: terraform
    
     - name: Terraform Plan
       run: terraform plan
 
+    - name: Terraform Apply
+      run: terraform apply -auto-approve
+      
+    - name: Get Terraform Outputs
+      id: terraform-outputs
+      run: |
+        echo "ECR_REPOSITORY=$(terraform output -raw ecr_repository_name)" >> $GITHUB_ENV
+        echo "TASK_DEF=$(terraform output -raw task_definition_family)" >> $GITHUB_ENV
+        echo "CONTAINER_NAME=$(terraform output -raw container_name)" >> $GITHUB_ENV
+        echo "ECS_SERVICE=$(terraform output -raw ecs_service_name)" >> $GITHUB_ENV
+        echo "ECS_CLUSTER=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_ENV
 
     - name: Login to Amazon ECR
       id: login-ecr
@@ -61,26 +51,26 @@ jobs:
         context: .
         push: true
         tags: |
-          ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
-          ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:latest
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
         platforms: linux/amd64
 
     - name: Download task definition
       run: |
-        aws ecs describe-task-definition --task-definition ${{ vars.TASK_DEF }} --query taskDefinition > task-definition.json
+        aws ecs describe-task-definition --task-definition ${{ env.TASK_DEF }} --query taskDefinition > task-definition.json
 
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
         task-definition: task-definition.json
-        container-name: ${{ vars.CONTAINER_NAME }}
-        image: ${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ vars.ECS_SERVICE }}
-        cluster: ${{ vars.ECS_CLUSTER }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true
